@@ -4,6 +4,8 @@ const app = express();
 const connect = require("../connection/connect");
 connect();
 const urlDb = require("../models/DbsSchema");
+const usersDb = require("../models/UserSchema");
+const bcrypt = require("bcrypt");
 const Code = require("../models/shortCodeGenrater");
 
 app.listen(3000, () => {
@@ -21,7 +23,7 @@ function isValidUrl(url) {
 
 app.use(express.json());
 
-app.post("/URL_Shorten", async (req, res) => {
+app.post("/URL_Shortener", async (req, res) => {
   try {
     const { LongURL } = req.body;
     if (!LongURL) {
@@ -99,6 +101,33 @@ app.get("/info/:shortCode", async (req, res) => {
       res.status(404).send("Info not found");
     }
   } catch (err) {
+    return res.status(500).send("somthing went wrong");
+  }
+});
+
+app.post("/URL_Shortener/signUp", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const isUsernameExist = await usersDb.findOne({ username: username });
+
+    if (isUsernameExist) {
+      return res.send("username already in use, choose a diffrent username");
+    }
+
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const newUser = new usersDb({
+      username: username,
+      password: hashedPassword,
+    });
+
+    await newUser.save();
+
+    return res.send(username);
+  } catch (err) {
+    console.log("CRASH ERROR:", err);
     return res.status(500).send("somthing went wrong");
   }
 });

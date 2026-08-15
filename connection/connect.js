@@ -1,10 +1,10 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
-const databaseUrl = process.env.MONGO_URI;
+const databaseUrl = process.env.dbURI;
 
 const connectDb = () => {
   mongoose
-    .connect(dbURI)
+    .connect(databaseUrl)
     .then(() => console.log("database connected !!"))
     .catch((err) => console.log("connection failed: ", err));
 };
