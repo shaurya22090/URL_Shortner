@@ -3,10 +3,14 @@ const express = require("express");
 const app = express();
 const connect = require("../connection/connect");
 connect();
+require("dotenv").config();
 const urlDb = require("../models/DbsSchema");
 const usersDb = require("../models/UserSchema");
 const bcrypt = require("bcrypt");
 const Code = require("../models/shortCodeGenrater");
+const jwt = require("jsonwebtoken");
+const JWT_Secrete_key = process.env.JWT_Secrete_key;
+const authMiddleware = require("../middleware/authMiddleware");
 
 app.listen(3000, () => {
   console.log("Server has started");
@@ -23,7 +27,7 @@ function isValidUrl(url) {
 
 app.use(express.json());
 
-app.post("/URL_Shortener", async (req, res) => {
+app.post("/createShortUrl", authMiddleware, async (req, res) => {
   try {
     const { LongURL } = req.body;
     if (!LongURL) {
@@ -128,6 +132,34 @@ app.post("/URL_Shortener/signUp", async (req, res) => {
     return res.send(username);
   } catch (err) {
     console.log("CRASH ERROR:", err);
+    return res.status(500).send("somthing went wrong");
+  }
+});
+
+app.post("/URL_Shortener/longIn", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const isUsernameExist = await usersDb.findOne({ username: username });
+
+    if (!isUsernameExist) {
+      return res.status(400).send("Invalid credentials");
+    }
+
+    const hashedPassword = isUsernameExist.password;
+    const isCorrectPassword = await bcrypt.compare(password, hashedPassword);
+
+    if (!isCorrectPassword) {
+      return res.status(400).send("Invalid credentials");
+    }
+
+    const token = jwt.sign({ userId: username }, JWT_Secrete_key, {
+      expiresIn: "1h",
+    });
+
+    return res.send({ message: "Login successful!", token: token });
+  } catch (err) {
+    console.log(err);
     return res.status(500).send("somthing went wrong");
   }
 });
