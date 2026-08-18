@@ -1,8 +1,8 @@
 # URL Shortener API
 
-A backend REST API that shortens long URLs into short, shareable links — similar to bit.ly. Built as a hands-on project to learn Node.js, Express, and MongoDB.
+A backend REST API that shortens long URLs into short, shareable links — similar to bit.ly. Built as a hands-on project to learn Node.js, Express, MongoDB, and authentication.
 
-Visiting a shortened link redirects to the original URL, and click activity is tracked for each link.
+Each user has their own account. Visiting a shortened link redirects to the original URL, and click activity is tracked per link. Users can only view and manage the links they created.
 
 ## Tech Stack
 
@@ -10,10 +10,15 @@ Visiting a shortened link redirects to the original URL, and click activity is t
 - **Express.js** — web framework for routing and middleware
 - **MongoDB** — database (hosted on MongoDB Atlas)
 - **Mongoose** — ODM for schema modeling and database interaction
+- **bcrypt** — password hashing
+- **jsonwebtoken (JWT)** — authentication tokens
 - **dotenv** — environment variable management
 
 ## Features
 
+- User registration and login with hashed passwords (bcrypt)
+- JWT-based authentication — protected routes require a valid token
+- Per-user data ownership — each user can only see and manage their own shortened links
 - Shorten any valid long URL into a unique short code
 - Returns the existing short URL if the same long URL is submitted again (no duplicates)
 - Redirects short URLs to their original destination
@@ -43,10 +48,11 @@ Visiting a shortened link redirects to the original URL, and click activity is t
    npm install
    ```
 
-3. Create a `.env` file in the root directory and add your MongoDB connection string:
+3. Create a `.env` file in the root directory:
 
    ```
    MONGO_URI=your_mongodb_connection_string_here
+   JWT_SECRET=your_own_random_secret_string_here
    ```
 
 4. Start the server
@@ -59,10 +65,68 @@ Visiting a shortened link redirects to the original URL, and click activity is t
 
 ## API Endpoints
 
-### Shorten a URL
+### Register a new user
 
 ```
-POST /URL_Shorten
+POST /register
+```
+
+**Request body:**
+
+```json
+{
+  "username": "shaurya",
+  "password": "yourpassword"
+}
+```
+
+Passwords are hashed with bcrypt before being stored — raw passwords are never saved.
+
+**Error responses:**
+
+- `400` — username already in use
+
+---
+
+### Login
+
+```
+POST /login
+```
+
+**Request body:**
+
+```json
+{
+  "username": "shaurya",
+  "password": "yourpassword"
+}
+```
+
+**Response:**
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+Use this token in the `Authorization` header for all protected routes below, formatted as:
+
+```
+Authorization: Bearer <token>
+```
+
+**Error responses:**
+
+- `401` — invalid username or password
+
+---
+
+### Shorten a URL 🔒 _(requires authentication)_
+
+```
+POST /createShortUrl
 ```
 
 **Request body:**
@@ -81,7 +145,8 @@ POST /URL_Shorten
   "LongURL": "https://www.example.com/some/very/long/path",
   "ShortURL": "http://localhost:3000/aZ3xQ1",
   "Clicks": 0,
-  "CreatedAt": "2026-08-01T10:00:00.000Z"
+  "CreatedAt": "2026-08-01T10:00:00.000Z",
+  "CreatedBy": "64f7a0c1b2d3e4f567890123"
 }
 ```
 
@@ -89,6 +154,7 @@ If the same `LongURL` is submitted again, the existing document is returned inst
 
 **Error responses:**
 
+- `401` — missing, invalid, or expired token
 - `400` — missing `LongURL` field
 - `400` — `LongURL` is not a valid URL
 
@@ -100,7 +166,7 @@ If the same `LongURL` is submitted again, the existing document is returned inst
 GET /:shortcode
 ```
 
-Visiting a shortened link (e.g. `http://localhost:3000/aZ3xQ1`) redirects the browser to the original long URL and increments its click count.
+Visiting a shortened link (e.g. `http://localhost:3000/aZ3xQ1`) redirects the browser to the original long URL and increments its click count. Publicly accessible — no authentication required.
 
 **Error response:**
 
@@ -108,13 +174,13 @@ Visiting a shortened link (e.g. `http://localhost:3000/aZ3xQ1`) redirects the br
 
 ---
 
-### Get link stats
+### Get link stats 🔒 _(requires authentication)_
 
 ```
 GET /info/:shortcode
 ```
 
-Returns the full record for a given short code, including current click count.
+Returns the full record for a given short code, including current click count. Only accessible by the user who created the link.
 
 **Response:**
 
@@ -124,26 +190,31 @@ Returns the full record for a given short code, including current click count.
   "LongURL": "https://www.example.com/some/very/long/path",
   "ShortURL": "http://localhost:3000/aZ3xQ1",
   "Clicks": 4,
-  "CreatedAt": "2026-08-01T10:00:00.000Z"
+  "CreatedAt": "2026-08-01T10:00:00.000Z",
+  "CreatedBy": "64f7a0c1b2d3e4f567890123"
 }
 ```
 
-**Error response:**
+**Error responses:**
 
-- `404` — short code not found
+- `401` — missing, invalid, or expired token
+- `404` — short code not found, or not created by the requesting user
 
 ## Project Structure
 
 ```
 url-shortener/
 ├── connection/
-│   └── connect.js         # MongoDB connection setup
+│   └── connect.js              # MongoDB connection setup
+├── middleware/
+│   └── authMiddleware.js       # JWT verification middleware
 ├── models/
-│   ├── DbsSchema.js        # URL schema and Mongoose model
-│   └── shortCodeGenrater.js  # Random short code generator
+│   ├── DbsSchema.js            # URL schema and Mongoose model
+│   ├── UserSchema.js           # User schema and Mongoose model
+│   └── shortCodeGenrater.js    # Random short code generator
 ├── routes/
-│   └── main.js              # Express app, routes, and server entry point
-├── .env                      # Environment variables (not committed)
+│   └── main.js                 # Express app, routes, and server entry point
+├── .env                         # Environment variables (not committed)
 ├── .gitignore
 └── package.json
 ```
@@ -153,6 +224,10 @@ url-shortener/
 - RESTful API design with Express
 - Schema modeling and CRUD operations with Mongoose/MongoDB
 - Async/await for handling database operations
+- Password security with bcrypt hashing
+- Authentication and authorization with JWT
+- Custom Express middleware for route protection
+- Per-user data scoping and access control
 - Input validation and error handling
 - Environment-based configuration for sensitive credentials
 - Generating unique identifiers with collision checking
@@ -163,3 +238,4 @@ url-shortener/
 - Add expiration dates for shortened links
 - Add a simple frontend for ease of use
 - Rate limiting to prevent abuse
+- Refresh tokens for longer-lived sessions
