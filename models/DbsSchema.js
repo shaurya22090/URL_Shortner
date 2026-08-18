@@ -5,6 +5,7 @@ const urlSchema = new mongoose.Schema({
   LongURL: { type: String, required: true },
   Clicks: { type: Number, required: true },
   CreatedAt: { type: Date, default: Date.now },
+  CreatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Users" },
 });
 
 // console.log("schema connection is also done");

@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 const express = require("express");
 const app = express();
+require("dotenv").config();
 const connect = require("../connection/connect");
 connect();
-require("dotenv").config();
 const urlDb = require("../models/DbsSchema");
 const usersDb = require("../models/UserSchema");
 const bcrypt = require("bcrypt");
@@ -62,17 +62,19 @@ app.post("/createShortUrl", authMiddleware, async (req, res) => {
       ShortURL: newShortUrl,
       Clicks: 0,
       CreatedAt: time,
+      CreatedBy: req.user.userId,
     });
 
     await newObject.save();
 
     return res.send(newObject);
   } catch (err) {
+    console.log(err);
     return res.status(500).send("somthing went wrong");
   }
 });
 
-app.get("/:shortcode", async (req, res) => {
+app.get("findLongUrl/:shortcode", async (req, res) => {
   try {
     const baseShortUrl = "http://localhost:3000/";
 
@@ -93,18 +95,27 @@ app.get("/:shortcode", async (req, res) => {
   }
 });
 
-app.get("/info/:shortCode", async (req, res) => {
+app.get("/info/:shortCode", authMiddleware, async (req, res) => {
   try {
     const baseShortUrl = "http://localhost:3000/";
     const newShortUrl = baseShortUrl + req.params.shortCode;
     const existing = await urlDb.findOne({ ShortURL: newShortUrl });
 
     if (existing) {
+      // if (
+      //   !existing.CreatedBy ||
+      //   existing.CreatedBy.toString() !== req.user.userId
+      // ) {
+      //   return res
+      //     .status(403)
+      //     .send("You do not have permission to view this URL's info.");
+      // }
       res.send(existing);
     } else {
       res.status(404).send("Info not found");
     }
   } catch (err) {
+    console.log(err);
     return res.status(500).send("somthing went wrong");
   }
 });
@@ -129,14 +140,18 @@ app.post("/URL_Shortener/signUp", async (req, res) => {
 
     await newUser.save();
 
-    return res.send(username);
+    const token = jwt.sign({ userId: newUser._id }, JWT_Secrete_key, {
+      expiresIn: "1h",
+    });
+
+    return res.send({ message: "SignUp successful!", token: token });
   } catch (err) {
     console.log("CRASH ERROR:", err);
     return res.status(500).send("somthing went wrong");
   }
 });
 
-app.post("/URL_Shortener/longIn", async (req, res) => {
+app.post("/URL_Shortener/logIn", async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -153,7 +168,7 @@ app.post("/URL_Shortener/longIn", async (req, res) => {
       return res.status(400).send("Invalid credentials");
     }
 
-    const token = jwt.sign({ userId: username }, JWT_Secrete_key, {
+    const token = jwt.sign({ userId: isUsernameExist._id }, JWT_Secrete_key, {
       expiresIn: "1h",
     });
 
@@ -161,5 +176,20 @@ app.post("/URL_Shortener/longIn", async (req, res) => {
   } catch (err) {
     console.log(err);
     return res.status(500).send("somthing went wrong");
+  }
+});
+
+app.get("/getMyUrls", authMiddleware, async (req, res) => {
+  try {
+    const userUrls = await urlDb.find({ CreatedBy: req.user.userId });
+
+    if (userUrls.length === 0) {
+      return res.status(404).send("You haven't created any short urls yet");
+    }
+
+    return res.send(userUrls);
+  } catch (err) {
+    console.log(err);
+    return res.status(500).send("Something went wrong");
   }
 });
