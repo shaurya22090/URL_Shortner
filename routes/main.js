@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const express = require("express");
+const cors = require("cors");
 const app = express();
+app.use(cors());
 require("dotenv").config();
 const connect = require("../connection/connect");
 connect();
@@ -27,7 +29,8 @@ function isValidUrl(url) {
 
 app.use(express.json());
 
-app.post("/createShortUrl", authMiddleware, async (req, res) => {
+//creating urls or giving urls previous urls
+app.post("/urls", authMiddleware, async (req, res) => {
   try {
     const { LongURL } = req.body;
     if (!LongURL) {
@@ -74,42 +77,38 @@ app.post("/createShortUrl", authMiddleware, async (req, res) => {
   }
 });
 
-app.get("findLongUrl/:shortcode", async (req, res) => {
+//giving urls to user which are genrated by the usre till now
+app.get("/urls", authMiddleware, async (req, res) => {
   try {
-    const baseShortUrl = "http://localhost:3000/";
+    const userUrls = await urlDb.find({ CreatedBy: req.user.userId });
 
-    const newShortUrl = baseShortUrl + req.params.shortcode;
-
-    const existing = await urlDb.findOne({ ShortURL: newShortUrl });
-
-    if (existing) {
-      const longUrl = existing.LongURL;
-      existing.Clicks += 1;
-      await existing.save();
-      res.redirect(longUrl);
-    } else {
-      res.status(404).send("URL not found");
+    if (userUrls.length === 0) {
+      return res.status(404).send("You haven't created any short urls yet");
     }
+
+    return res.send(userUrls);
   } catch (err) {
-    return res.status(500).send("somthing went wrong");
+    console.log(err);
+    return res.status(500).send("Something went wrong");
   }
 });
 
-app.get("/info/:shortCode", authMiddleware, async (req, res) => {
+//geting a perticular urls info
+app.get("/urls/:shortCode", authMiddleware, async (req, res) => {
   try {
     const baseShortUrl = "http://localhost:3000/";
     const newShortUrl = baseShortUrl + req.params.shortCode;
     const existing = await urlDb.findOne({ ShortURL: newShortUrl });
 
     if (existing) {
-      // if (
-      //   !existing.CreatedBy ||
-      //   existing.CreatedBy.toString() !== req.user.userId
-      // ) {
-      //   return res
-      //     .status(403)
-      //     .send("You do not have permission to view this URL's info.");
-      // }
+      if (
+        !existing.CreatedBy ||
+        existing.CreatedBy.toString() !== req.user.userId
+      ) {
+        return res
+          .status(403)
+          .send("You do not have permission to view this URL's info.");
+      }
       res.send(existing);
     } else {
       res.status(404).send("Info not found");
@@ -120,14 +119,17 @@ app.get("/info/:shortCode", authMiddleware, async (req, res) => {
   }
 });
 
-app.post("/URL_Shortener/signUp", async (req, res) => {
+//SignUp
+app.post("/auth/register", async (req, res) => {
   try {
     const { username, password } = req.body;
 
     const isUsernameExist = await usersDb.findOne({ username: username });
 
     if (isUsernameExist) {
-      return res.send("username already in use, choose a diffrent username");
+      return res
+        .status(400)
+        .send("username already in use, choose a diffrent username");
     }
 
     const saltRounds = 10;
@@ -151,21 +153,22 @@ app.post("/URL_Shortener/signUp", async (req, res) => {
   }
 });
 
-app.post("/URL_Shortener/logIn", async (req, res) => {
+//LogIn
+app.post("/auth/login", async (req, res) => {
   try {
     const { username, password } = req.body;
 
     const isUsernameExist = await usersDb.findOne({ username: username });
 
     if (!isUsernameExist) {
-      return res.status(400).send("Invalid credentials");
+      return res.status(401).send("Invalid credentials");
     }
 
     const hashedPassword = isUsernameExist.password;
     const isCorrectPassword = await bcrypt.compare(password, hashedPassword);
 
     if (!isCorrectPassword) {
-      return res.status(400).send("Invalid credentials");
+      return res.status(401).send("Invalid credentials");
     }
 
     const token = jwt.sign({ userId: isUsernameExist._id }, JWT_Secrete_key, {
@@ -179,17 +182,24 @@ app.post("/URL_Shortener/logIn", async (req, res) => {
   }
 });
 
-app.get("/getMyUrls", authMiddleware, async (req, res) => {
+//redirecting
+app.get("/:shortcode", async (req, res) => {
   try {
-    const userUrls = await urlDb.find({ CreatedBy: req.user.userId });
+    const baseShortUrl = "http://localhost:3000/";
 
-    if (userUrls.length === 0) {
-      return res.status(404).send("You haven't created any short urls yet");
+    const newShortUrl = baseShortUrl + req.params.shortcode;
+
+    const existing = await urlDb.findOne({ ShortURL: newShortUrl });
+
+    if (existing) {
+      const longUrl = existing.LongURL;
+      existing.Clicks += 1;
+      await existing.save();
+      res.redirect(longUrl);
+    } else {
+      res.status(404).send("URL not found");
     }
-
-    return res.send(userUrls);
   } catch (err) {
-    console.log(err);
-    return res.status(500).send("Something went wrong");
+    return res.status(500).send("somthing went wrong");
   }
 });

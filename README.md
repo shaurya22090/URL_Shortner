@@ -37,14 +37,14 @@ Each user has their own account. Visiting a shortened link redirects to the orig
 
 1. Clone the repository
 
-   ```bash
-   git clone <your-repo-url>
-   cd url-shortener
+   ```
+   git clone https://github.com/shaurya22090/URL_Shortner.git
+   cd URL_Shortner
    ```
 
 2. Install dependencies
 
-   ```bash
+   ```
    npm install
    ```
 
@@ -52,13 +52,13 @@ Each user has their own account. Visiting a shortened link redirects to the orig
 
    ```
    MONGO_URI=your_mongodb_connection_string_here
-   JWT_SECRET=your_own_random_secret_string_here
+   JWT_Secrete_key=your_own_random_secret_string_here
    ```
 
 4. Start the server
 
-   ```bash
-   node main.js
+   ```
+   node routes/main.js
    ```
 
    The server will run on `http://localhost:3000`.
@@ -68,7 +68,7 @@ Each user has their own account. Visiting a shortened link redirects to the orig
 ### Register a new user
 
 ```
-POST /register
+POST /auth/register
 ```
 
 **Request body:**
@@ -80,7 +80,16 @@ POST /register
 }
 ```
 
-Passwords are hashed with bcrypt before being stored — raw passwords are never saved.
+Passwords are hashed with bcrypt before being stored — raw passwords are never saved. On success, a JWT is returned immediately so the new user is logged in.
+
+**Response:**
+
+```json
+{
+  "message": "SignUp successful!",
+  "token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
 
 **Error responses:**
 
@@ -91,7 +100,7 @@ Passwords are hashed with bcrypt before being stored — raw passwords are never
 ### Login
 
 ```
-POST /login
+POST /auth/login
 ```
 
 **Request body:**
@@ -107,6 +116,7 @@ POST /login
 
 ```json
 {
+  "message": "Login successful!",
   "token": "eyJhbGciOiJIUzI1NiIs..."
 }
 ```
@@ -126,7 +136,7 @@ Authorization: Bearer <token>
 ### Shorten a URL 🔒 _(requires authentication)_
 
 ```
-POST /createShortUrl
+POST /urls
 ```
 
 **Request body:**
@@ -160,24 +170,40 @@ If the same `LongURL` is submitted again, the existing document is returned inst
 
 ---
 
-### Redirect to original URL
+### Get all your shortened URLs 🔒 _(requires authentication)_
 
 ```
-GET /:shortcode
+GET /urls
 ```
 
-Visiting a shortened link (e.g. `http://localhost:3000/aZ3xQ1`) redirects the browser to the original long URL and increments its click count. Publicly accessible — no authentication required.
+Returns every short URL created by the currently authenticated user.
 
-**Error response:**
+**Response:**
 
-- `404` — short code not found
+```json
+[
+  {
+    "_id": "64f8a1b2c3d4e5f678901234",
+    "LongURL": "https://www.example.com/some/very/long/path",
+    "ShortURL": "http://localhost:3000/aZ3xQ1",
+    "Clicks": 4,
+    "CreatedAt": "2026-08-01T10:00:00.000Z",
+    "CreatedBy": "64f7a0c1b2d3e4f567890123"
+  }
+]
+```
+
+**Error responses:**
+
+- `401` — missing, invalid, or expired token
+- `404` — you haven't created any short URLs yet
 
 ---
 
-### Get link stats 🔒 _(requires authentication)_
+### Get a specific link's info 🔒 _(requires authentication)_
 
 ```
-GET /info/:shortcode
+GET /urls/:shortCode
 ```
 
 Returns the full record for a given short code, including current click count. Only accessible by the user who created the link.
@@ -198,12 +224,27 @@ Returns the full record for a given short code, including current click count. O
 **Error responses:**
 
 - `401` — missing, invalid, or expired token
-- `404` — short code not found, or not created by the requesting user
+- `403` — link exists but wasn't created by you
+- `404` — short code not found
+
+---
+
+### Redirect to original URL
+
+```
+GET /:shortcode
+```
+
+Visiting a shortened link (e.g. `http://localhost:3000/aZ3xQ1`) redirects the browser to the original long URL and increments its click count. Publicly accessible — no authentication required.
+
+**Error response:**
+
+- `404` — URL not found
 
 ## Project Structure
 
 ```
-url-shortener/
+URL_Shortner/
 ├── connection/
 │   └── connect.js              # MongoDB connection setup
 ├── middleware/
